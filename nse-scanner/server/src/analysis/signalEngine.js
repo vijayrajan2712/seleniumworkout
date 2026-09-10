@@ -26,7 +26,15 @@ function classify(score) {
  * `breakoutTracker` is the shared, stateful BreakoutTracker instance (one per scan engine)
  * that turns raw close-based breakouts into next-candle-open-confirmed signals.
  */
-export function evaluateSymbol({ symbolId, candles5m, previousDayCandle, previousMonthCandle, newsSentiment, breakoutTracker }) {
+export function evaluateSymbol({
+  symbolId,
+  candles5m,
+  previousDayCandle,
+  previousMonthCandle,
+  newsSentiment,
+  breakoutTracker,
+  deltaTracker,
+}) {
   if (candles5m.length < 3) return null;
 
   const current = candles5m[candles5m.length - 1];
@@ -106,6 +114,10 @@ export function evaluateSymbol({ symbolId, candles5m, previousDayCandle, previou
     );
   }
 
+  const delta = institutional?.available
+    ? deltaTracker.update(symbolId, institutional.buyDelta, institutional.sellDelta, current.close)
+    : { deltaCr: 0, ...deltaTracker.get(symbolId) };
+
   if (Math.abs(newsSentiment) > 0.15) {
     const dir = newsSentiment > 0 ? 1 : -1;
     score += dir * WEIGHTS.news * Math.min(Math.abs(newsSentiment), 1);
@@ -134,6 +146,10 @@ export function evaluateSymbol({ symbolId, candles5m, previousDayCandle, previou
     unusualVolume,
     institutional,
     newsSentiment,
+    dayVolume: current.dayVolume ?? null,
+    deltaCr: delta.deltaCr,
+    positiveDeltaCr: delta.positiveDeltaCr,
+    negativeDeltaCr: delta.negativeDeltaCr,
   };
 }
 

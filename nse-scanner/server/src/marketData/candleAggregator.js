@@ -33,6 +33,7 @@ export function makeTickAggregator(candleStore) {
       low: tick.ltp,
       close: tick.ltp,
       volume: deltaVolume,
+      dayVolume: tick.volume, // cumulative volume for the day as of this tick - used for the >5L liquidity filter
       buyQuantity: tick.buyQuantity,
       sellQuantity: tick.sellQuantity,
     });

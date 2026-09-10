@@ -147,10 +147,35 @@
   color: #dfe3e8;
   border-color: #3a4657;
 }
+.volume-filter-toggle {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  color: #9aa4b2;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
 .scanner-count {
   margin-left: auto;
   font-size: 11px;
   color: #566072;
+}
+
+.cell-volume {
+  font-variant-numeric: tabular-nums;
+  color: #9aa4b2;
+}
+.cell-delta {
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+.cell-delta.bull {
+  color: #4fd8c4;
+}
+.cell-delta.bear {
+  color: #ff8b88;
 }
 
 .scanner-table-wrap {

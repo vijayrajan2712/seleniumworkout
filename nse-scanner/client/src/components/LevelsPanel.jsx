@@ -71,6 +71,14 @@ export default function LevelsPanel({ symbol, signal }) {
       </section>
 
       <section>
+        <h4>Volume &amp; Order-Flow Delta</h4>
+        <div className="kv"><label>Day volume</label><span>{signal.dayVolume != null ? signal.dayVolume.toLocaleString('en-IN') : '—'}</span></div>
+        <div className="kv"><label>Latest candle Δ</label><span className={signal.deltaCr > 0 ? 'bull' : signal.deltaCr < 0 ? 'bear' : ''}>₹{signal.deltaCr?.toFixed(2)} cr</span></div>
+        <div className="kv"><label>Cumulative positive Δ</label><span className="bull">+₹{signal.positiveDeltaCr?.toFixed(2)} cr</span></div>
+        <div className="kv"><label>Cumulative negative Δ</label><span className="bear">₹{signal.negativeDeltaCr?.toFixed(2)} cr</span></div>
+      </section>
+
+      <section>
         <h4>Unusual Volume</h4>
         {unusualVolume ? (
           <div className="kv">

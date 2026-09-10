@@ -24,6 +24,13 @@ On every 5-minute candle close, for all ~500 Nifty 500 stocks:
   institutional data, and is labeled as such in the UI.
 - **News/sector sentiment** - simulated headlines tagged by sector (real financial news API
   can be swapped in later)
+- **Liquidity filter** - a "Volume > 5L only" toggle in the scanner hides any stock whose
+  cumulative day volume hasn't crossed 5,00,000 shares yet
+- **Order-flow delta (₹crore)** - every 5m candle close computes net buy-sell quantity
+  imbalance x price, in crore. Two running totals accumulate through the day: **Positive Δ**
+  (sum of every candle where delta was net-buying) and **Negative Δ** (sum of every candle
+  where delta was net-selling) - shown as their own sortable columns, so you can spot stocks
+  with sustained one-sided flow, not just a single candle's snapshot.
 
 Each stock gets a scored verdict (`STRONG BUY` / `BUY` / `NEUTRAL` / `SELL` / `STRONG SELL`)
 with a confidence % and a plain-English reasoning trail, shown in the scanner table and the

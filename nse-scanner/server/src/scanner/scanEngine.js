@@ -1,6 +1,7 @@
 import { makeTickAggregator } from '../marketData/candleAggregator.js';
 import { evaluateSymbol } from '../analysis/signalEngine.js';
 import { BreakoutTracker } from '../analysis/breakoutConfirmation.js';
+import { DeltaTracker } from '../analysis/deltaTracker.js';
 
 const MIN_CANDLES_TO_EVALUATE = 3;
 
@@ -19,6 +20,7 @@ export class ScanEngine {
     this.dailyHistoryStore = dailyHistoryStore;
     this.newsSimulator = newsSimulator;
     this.breakoutTracker = new BreakoutTracker();
+    this.deltaTracker = new DeltaTracker();
     this.latestSignals = new Map();
     this._stopFeed = null;
   }
@@ -75,6 +77,7 @@ export class ScanEngine {
       previousMonthCandle,
       newsSentiment,
       breakoutTracker: this.breakoutTracker,
+      deltaTracker: this.deltaTracker,
     });
     if (signal) this.latestSignals.set(symbolId, signal);
     return signal;

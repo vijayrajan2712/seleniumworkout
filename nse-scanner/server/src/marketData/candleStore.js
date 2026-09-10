@@ -24,6 +24,7 @@ export class CandleStore {
       last.volume += candle.volume;
       if (candle.buyQuantity != null) last.buyQuantity = candle.buyQuantity;
       if (candle.sellQuantity != null) last.sellQuantity = candle.sellQuantity;
+      if (candle.dayVolume != null) last.dayVolume = candle.dayVolume;
       return last;
     }
     arr.push(candle);

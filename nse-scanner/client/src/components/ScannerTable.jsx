@@ -14,9 +14,12 @@ const FILTERS = [
   { id: 'institutional', label: 'Big money' },
 ];
 
+const MIN_VOLUME = 500_000; // 5 lakh shares
+
 export default function ScannerTable({ universe, signals, tickPrices, activeId, onSelect }) {
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState('all');
+  const [minVolumeOnly, setMinVolumeOnly] = useState(false);
   const [sort, setSort] = useState({ key: 'score', dir: 'desc' });
 
   const rows = useMemo(() => {
@@ -34,6 +37,8 @@ export default function ScannerTable({ universe, signals, tickPrices, activeId, 
     else if (filter === 'unusual') list = list.filter(({ sig }) => sig?.unusualVolume?.unusual);
     else if (filter === 'institutional') list = list.filter(({ sig }) => sig?.institutional?.flagged);
 
+    if (minVolumeOnly) list = list.filter(({ sig }) => sig?.dayVolume >= MIN_VOLUME);
+
     const dir = sort.dir === 'asc' ? 1 : -1;
     list.sort((a, b) => {
       const av = sortValue(a, sort.key);
@@ -47,7 +52,7 @@ export default function ScannerTable({ universe, signals, tickPrices, activeId, 
     });
 
     return list;
-  }, [universe, signals, tickPrices, search, filter, sort]);
+  }, [universe, signals, tickPrices, search, filter, minVolumeOnly, sort]);
 
   function toggleSort(key) {
     setSort((prev) => (prev.key === key ? { key, dir: prev.dir === 'asc' ? 'desc' : 'asc' } : { key, dir: 'desc' }));
@@ -69,6 +74,10 @@ export default function ScannerTable({ universe, signals, tickPrices, activeId, 
             </button>
           ))}
         </div>
+        <label className="volume-filter-toggle">
+          <input type="checkbox" checked={minVolumeOnly} onChange={(e) => setMinVolumeOnly(e.target.checked)} />
+          Volume &gt; 5L only
+        </label>
         <span className="scanner-count">{rows.length} / {universe.length}</span>
       </div>
 
@@ -81,8 +90,11 @@ export default function ScannerTable({ universe, signals, tickPrices, activeId, 
               <Th label="Chg%" active={sort.key === 'change'} dir={sort.dir} onClick={() => toggleSort('change')} />
               <Th label="Verdict" active={sort.key === 'score'} dir={sort.dir} onClick={() => toggleSort('score')} />
               <Th label="Conf%" active={sort.key === 'confidence'} dir={sort.dir} onClick={() => toggleSort('confidence')} />
-              <th>Vol</th>
+              <Th label="Volume" active={sort.key === 'volume'} dir={sort.dir} onClick={() => toggleSort('volume')} />
+              <th>Unusual</th>
               <th>Flow</th>
+              <Th label="Pos Δ (₹cr)" active={sort.key === 'posDelta'} dir={sort.dir} onClick={() => toggleSort('posDelta')} />
+              <Th label="Neg Δ (₹cr)" active={sort.key === 'negDelta'} dir={sort.dir} onClick={() => toggleSort('negDelta')} />
             </tr>
           </thead>
           <tbody>
@@ -104,7 +116,8 @@ export default function ScannerTable({ universe, signals, tickPrices, activeId, 
                   <span className={`verdict-chip ${verdictClass(sig?.verdict)}`}>{sig?.verdict ?? '…'}</span>
                 </td>
                 <td className="cell-conf">{sig?.confidence ?? '—'}</td>
-                <td>{sig?.unusualVolume?.unusual && <span className="flag-badge vol">VOL {sig.unusualVolume.volumeRatio}x</span>}</td>
+                <td className="cell-volume">{sig?.dayVolume != null ? formatVolume(sig.dayVolume) : '—'}</td>
+                <td>{sig?.unusualVolume?.unusual && <span className="flag-badge vol">{sig.unusualVolume.volumeRatio}x</span>}</td>
                 <td>
                   {sig?.institutional?.flagged && (
                     <span className={`flag-badge ${sig.institutional.direction === 'buy_side' ? 'bull' : 'bear'}`}>
@@ -112,6 +125,8 @@ export default function ScannerTable({ universe, signals, tickPrices, activeId, 
                     </span>
                   )}
                 </td>
+                <td className="cell-delta bull">{sig?.positiveDeltaCr ? `+${sig.positiveDeltaCr.toFixed(2)}` : '—'}</td>
+                <td className="cell-delta bear">{sig?.negativeDeltaCr ? sig.negativeDeltaCr.toFixed(2) : '—'}</td>
               </tr>
             ))}
           </tbody>
@@ -141,6 +156,12 @@ function sortValue(row, key) {
       return row.sig?.score ?? null;
     case 'confidence':
       return row.sig?.confidence ?? null;
+    case 'volume':
+      return row.sig?.dayVolume ?? null;
+    case 'posDelta':
+      return row.sig?.positiveDeltaCr ?? null;
+    case 'negDelta':
+      return row.sig?.negativeDeltaCr ?? null;
     default:
       return null;
   }
@@ -149,4 +170,10 @@ function sortValue(row, key) {
 function changeClass(pct) {
   if (pct == null) return '';
   return pct > 0 ? 'bull' : pct < 0 ? 'bear' : '';
+}
+
+function formatVolume(v) {
+  if (v >= 100000) return `${(v / 100000).toFixed(1)}L`;
+  if (v >= 1000) return `${(v / 1000).toFixed(1)}K`;
+  return String(v);
 }
