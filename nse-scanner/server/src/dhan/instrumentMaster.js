@@ -1,21 +1,29 @@
 // Loads Dhan's instrument master ("scrip master") CSV and maps Nifty 500 trading symbols
-// to Dhan securityIds for the NSE equity segment. Column names are confirmed from Dhan's
-// official Python SDK / docs (SEM_EXM_EXCH_ID, SEM_SEGMENT, SEM_SMST_SECURITY_ID,
-// SEM_TRADING_SYMBOL, SEM_SERIES) but we match headers defensively (case-insensitive
-// keyword match) so a minor Dhan-side column rename doesn't silently break the mapping.
+// to Dhan securityIds for the NSE equity segment.
+//
+// Dhan's real CSV column names have changed over time and don't match older SDK/forum docs
+// (e.g. there is currently no "TRADING_SYMBOL" column at all - the live header is
+// EXCH_ID,SEGMENT,SECURITY_ID,ISIN,INSTRUMENT,UNDERLYING_SECURITY_ID,UNDERLYING_SYMBOL,
+// SYMBOL_NAME,DISPLAY_NAME,INSTRUMENT_TYPE,SERIES,LOT_SIZE,... - confirmed from a live fetch).
+// Rather than hard-code one guessed "symbol" column and risk silently breaking again on the
+// next Dhan-side rename, this loader tries several plausible candidate columns and picks
+// whichever one actually matches the most symbols in our Nifty 500 universe at runtime.
 
 const DETAILED_CSV_URL = 'https://images.dhan.co/api-data/api-scrip-master-detailed.csv';
 
-const HEADER_KEYWORDS = {
-  securityId: ['SEM_SMST_SECURITY_ID', 'SECURITY_ID'],
-  tradingSymbol: ['SEM_TRADING_SYMBOL', 'TRADING_SYMBOL'],
-  exchange: ['SEM_EXM_EXCH_ID', 'EXCH_ID', 'EXCHANGE'],
-  segment: ['SEM_SEGMENT', 'SEGMENT'],
-  series: ['SEM_SERIES', 'SERIES'],
-  instrumentName: ['SEM_INSTRUMENT_NAME', 'INSTRUMENT_NAME', 'INSTRUMENT'],
-};
+const SECURITY_ID_CANDIDATES = ['SEM_SMST_SECURITY_ID', 'SECURITY_ID'];
+const EXCHANGE_CANDIDATES = ['SEM_EXM_EXCH_ID', 'EXCH_ID', 'EXCHANGE'];
+const SERIES_CANDIDATES = ['SEM_SERIES', 'SERIES'];
+const SYMBOL_COLUMN_CANDIDATES = [
+  'UNDERLYING_SYMBOL',
+  'SEM_TRADING_SYMBOL',
+  'TRADING_SYMBOL',
+  'SYMBOL_NAME',
+  'DISPLAY_NAME',
+];
 
-export async function loadInstrumentMaster() {
+/** `universe` (optional): the Nifty 500 list, used to self-verify which column is the real symbol column. */
+export async function loadInstrumentMaster(universe) {
   const res = await fetch(DETAILED_CSV_URL, { headers: { Accept: 'text/csv' } });
   if (!res.ok) throw new Error(`Failed to fetch Dhan instrument master: HTTP ${res.status}`);
   const text = await res.text();
@@ -23,34 +31,69 @@ export async function loadInstrumentMaster() {
   if (rows.length < 2) throw new Error('Dhan instrument master CSV came back empty');
 
   const header = rows[0];
-  const colIndex = resolveColumns(header);
-  console.log(`[dhan/instrumentMaster] resolved columns: ${JSON.stringify(colIndex)}`);
+  const upper = header.map((h) => h.trim().toUpperCase());
 
-  const entries = [];
+  const securityIdIdx = findColumn(upper, SECURITY_ID_CANDIDATES);
+  const exchangeIdx = findColumn(upper, EXCHANGE_CANDIDATES);
+  const seriesIdx = findColumn(upper, SERIES_CANDIDATES);
+
+  if (securityIdIdx == null || exchangeIdx == null) {
+    throw new Error(
+      `Could not find required security-id/exchange columns in Dhan instrument master CSV header: ${header.join(',')}`
+    );
+  }
+
+  let best = null;
+  for (const candidateName of SYMBOL_COLUMN_CANDIDATES) {
+    const symbolIdx = upper.findIndex((h) => h === candidateName);
+    if (symbolIdx === -1) continue;
+    const map = buildSymbolMap(rows, { securityIdIdx, exchangeIdx, seriesIdx, symbolIdx });
+    const matchCount = universe ? universe.filter((s) => map.has(s.symbol.toUpperCase())).length : map.size;
+    console.log(`[dhan/instrumentMaster] candidate column "${candidateName}" -> ${matchCount} matches`);
+    if (!best || matchCount > best.matchCount) best = { column: candidateName, map, matchCount };
+  }
+
+  if (!best || best.matchCount === 0) {
+    throw new Error(
+      `Could not find a usable trading-symbol column in Dhan instrument master CSV header: ${header.join(
+        ','
+      )} (tried: ${SYMBOL_COLUMN_CANDIDATES.join(', ')})`
+    );
+  }
+
+  console.log(
+    `[dhan/instrumentMaster] using "${best.column}" as the symbol column - matched ${best.matchCount}${
+      universe ? `/${universe.length}` : ''
+    } symbols, ${best.map.size} total NSE equity rows indexed`
+  );
+  return best.map;
+}
+
+function buildSymbolMap(rows, { securityIdIdx, exchangeIdx, seriesIdx, symbolIdx }) {
+  const bySymbol = new Map();
   for (let i = 1; i < rows.length; i++) {
     const row = rows[i];
-    if (row.length < header.length) continue;
-    const exchange = row[colIndex.exchange]?.trim().toUpperCase();
-    const segment = row[colIndex.segment]?.trim().toUpperCase();
+    const exchange = row[exchangeIdx]?.trim().toUpperCase();
     if (exchange !== 'NSE') continue;
-    if (segment && !['E', 'EQUITY'].includes(segment)) continue;
-    entries.push({
-      securityId: row[colIndex.securityId]?.trim(),
-      tradingSymbol: row[colIndex.tradingSymbol]?.trim().toUpperCase(),
-      series: colIndex.series != null ? row[colIndex.series]?.trim() : undefined,
-    });
-  }
+    // Restrict to the plain equity (EQ) series when the column is available, so we get the
+    // single cash-market row per stock rather than one of its many F&O derivative contracts.
+    if (seriesIdx != null && row[seriesIdx]?.trim().toUpperCase() !== 'EQ') continue;
 
-  const bySymbol = new Map();
-  for (const e of entries) {
-    if (!e.tradingSymbol || !e.securityId) continue;
-    // Prefer the plain EQ series row if a symbol appears more than once.
-    if (!bySymbol.has(e.tradingSymbol) || e.series === 'EQ') {
-      bySymbol.set(e.tradingSymbol, e.securityId);
-    }
+    const symbol = row[symbolIdx]?.trim().toUpperCase();
+    const securityId = row[securityIdIdx]?.trim();
+    if (!symbol || !securityId) continue;
+    if (!bySymbol.has(symbol)) bySymbol.set(symbol, securityId);
   }
-  console.log(`[dhan/instrumentMaster] indexed ${bySymbol.size} NSE equity symbols`);
   return bySymbol;
+}
+
+function findColumn(upperHeader, candidates) {
+  for (const candidate of candidates) {
+    let idx = upperHeader.findIndex((h) => h === candidate);
+    if (idx === -1) idx = upperHeader.findIndex((h) => h.includes(candidate));
+    if (idx !== -1) return idx;
+  }
+  return null;
 }
 
 /** Maps each Nifty500 universe entry to a Dhan securityId; logs and skips any that don't resolve. */
@@ -70,24 +113,6 @@ export function mapUniverseToSecurityIds(universe, bySymbolMap) {
     );
   }
   return mapped;
-}
-
-function resolveColumns(header) {
-  const upper = header.map((h) => h.trim().toUpperCase());
-  const colIndex = {};
-  for (const [key, candidates] of Object.entries(HEADER_KEYWORDS)) {
-    let idx = -1;
-    for (const candidate of candidates) {
-      idx = upper.findIndex((h) => h === candidate);
-      if (idx === -1) idx = upper.findIndex((h) => h.includes(candidate));
-      if (idx !== -1) break;
-    }
-    if (idx === -1 && key !== 'series' && key !== 'instrumentName') {
-      throw new Error(`Could not find a column for "${key}" in Dhan instrument master CSV header: ${header.join(',')}`);
-    }
-    colIndex[key] = idx === -1 ? null : idx;
-  }
-  return colIndex;
 }
 
 /** Minimal RFC4180-ish CSV parser (handles quoted fields containing commas). */

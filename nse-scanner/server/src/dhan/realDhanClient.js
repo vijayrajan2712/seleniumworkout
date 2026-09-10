@@ -17,8 +17,8 @@ export class RealDhanClient {
     return 'live';
   }
 
-  async init() {
-    this._masterBySymbol = await loadInstrumentMaster();
+  async init(universe) {
+    this._masterBySymbol = await loadInstrumentMaster(universe);
   }
 
   mapSecurityIds(universe) {

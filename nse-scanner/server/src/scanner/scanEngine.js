@@ -26,7 +26,7 @@ export class ScanEngine {
   }
 
   async bootstrap({ onProgress } = {}) {
-    await this.dhanClient.init();
+    await this.dhanClient.init(this.universe);
     this.dhanClient.mapSecurityIds(this.universe);
     onProgress?.('Fetching daily history for PDH/PDL, PMH/PML and CPR...');
     const dailyMap = await this.dhanClient.bootstrapDailyHistory(this.universe);
