@@ -1,0 +1,17 @@
+{
+  "name": "nse-scanner-server",
+  "version": "1.0.0",
+  "description": "Nifty 500 NSE scanner - live 5m signals from PDH/PDL, PMH/PML, CPR/pivots, unusual volume, institutional-flow heuristic and news sentiment. Scanner only, no order placement.",
+  "main": "src/index.js",
+  "type": "module",
+  "scripts": {
+    "start": "node src/index.js",
+    "start:env": "node --env-file=.env src/index.js",
+    "dev": "node --watch src/index.js"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "express": "^4.19.2",
+    "ws": "^8.18.0"
+  }
+}
