@@ -1,0 +1,16 @@
+{
+  "name": "trading-signal-server",
+  "version": "1.0.0",
+  "description": "Forex/Gold/Oil trading signal engine - simulated market data, technical analysis and news-driven signals streamed over WebSocket",
+  "main": "src/index.js",
+  "type": "module",
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "node --watch src/index.js"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "express": "^4.19.2",
+    "ws": "^8.18.0"
+  }
+}
